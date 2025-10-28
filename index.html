@@ -3,28 +3,276 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>MICRODRAKO GTA</title>
-  <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+  <title>STREET KINGS 3D</title>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
-    body { background:#000; overflow:hidden; font-family:'Arial', sans-serif; }
-    canvas { display:block; margin:0 auto; image-rendering: pixelated; }
-    
-    /* LOADING */
-    #loading { position:fixed; top:0; left:0; width:100vw; height:100vh; background:#111 url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22><rect width=%22100%22 height=%22100%22 fill=%22%23000%22/><text x=%2250%25%22 y=%2250%25%22 font-size=%2216%22 fill=%22%23f00%22 text-anchor=%22middle%22 dominant-baseline=%22middle%22>MICRODRAKO GTA</text></svg>') center/cover; display:flex; flex-direction:column; justify-content:center; align-items:center; color:#fff; z-index:9999; }
-    .bar { width:60%; height:20px; background:#333; border:2px solid #f00; border-radius:10px; overflow:hidden; margin-top:20px; }
-    .fill { height:100%; width:0%; background:linear-gradient(90deg, #f00, #ff0); transition:width 0.2s; }
+    body { overflow:hidden; background:#000; font-family:Arial; }
+    #container { position:relative; width:100vw; height:100vh; }
+    #hud { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:10; }
+    .bar { position:absolute; background:rgba(0,0,0,0.6); border:2px solid #333; border-radius:8px; padding:8px; }
+    #healthBar { left:20px; bottom:20px; width:250px; }
+    #armorBar { left:20px; bottom:60px; width:250px; }
+    #money { right:20px; top:20px; color:#0f0; font-size:24px; font-weight:bold; }
+    #ammo { right:20px; bottom:20px; font-size:28px; color:#ff0; }
+    #crosshair { position:absolute; left:50%; top:50%; width:30px; height:30px; transform:translate(-50%,-50%); pointer-events:none; }
+    #crosshair::before, #crosshair::after { content:''; position:absolute; background:#fff; }
+    #crosshair::before { left:50%; top:0; width:2px; height:12px; transform:translateX(-50%); }
+    #crosshair::after { top:50%; left:0; height:2px; width:12px; transform:translateY(-50%); }
+    #loading { position:absolute; inset:0; background:#111; color:#0f0; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:24px; z-index:100; }
+    .btn { margin-top:20px; padding:12px 30px; background:#0f0; color:#000; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:18px; }
+    .btn:hover { background:#0c0; }
+    .fill { height:10px; background:#f00; width:100%; border-radius:4px; transition:width 0.2s; }
+    .armor-fill { background:#00f; }
+    #minimap { position:absolute; right:20px; bottom:120px; width:180px; height:180px; border:3px solid #333; border-radius:12px; overflow:hidden; }
+  }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <div id="loading">
+      <h1>STREET KINGS 3D</h1>
+      <p>Loading world... <span id="progress">0</span>%</p>
+      <div style="width:400px; height:8px; background:#333; border-radius:4px; margin-top:10px;">
+        <div id="loadFill" style="height:100%; width:0%; background:#0f0; border-radius:4px;"></div>
+      </div>
+      <button class="btn" id="startBtn" style="display:none;" onclick="startGame()">ENTER THE CITY</button>
+    </div>
+  </div>
 
-    /* HUD */
-    .hud { position:absolute; bottom:15px; left:15px; background:rgba(0,0,0,0.7); color:#fff; padding:12px; border-radius:8px; font-weight:bold; min-width:220px; backdrop-filter:blur(4px); }
-    .minimap { position:absolute; top:15px; right:15px; width:180px; height:180px; border:4px solid #fff; border-radius:50%; overflow:hidden; background:#111; box-shadow:0 0 15px #000; }
-    .minimap canvas { width:100%; height:100%; }
+  <div id="hud" style="display:none;">
+    <div class="bar" id="healthBar"><div>HEALTH</div><div class="fill" id="healthFill"></div></div>
+    <div class="bar" id="armorBar"><div>ARMOR</div><div class="fill armor-fill" id="armorFill"></div></div>
+    <div id="money">$1,000,000</div>
+    <div id="ammo">30 / 150</div>
+    <div id="crosshair"></div>
+    <canvas id="minimap"></canvas>
+  </div>
 
-    /* MENU */
-    .menu { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.95); padding:40px; border-radius:15px; color:#fff; text-align:center; width:90%; max-width:500px; border:3px solid #f00; display:none; }
-    .btn { background:#c00; color:#fff; border:none; padding:15px 30px; margin:10px; border-radius:8px; font-weight:bold; cursor:pointer; font-size:18px; transition:0.2s; }
-    .btn:hover { background:#f00; transform:scale(1.05); }
+  <script type="module">
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.module.js';
+    import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.157.0/examples/jsm/loaders/GLTFLoader.js';
+    import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.157.0/examples/jsm/controls/OrbitControls.js';
+    import { RapierPhysics } from 'https://cdn.jsdelivr.net/npm/@dimforge/rapier3d@0.11.1/rapier3d.js';
 
-    /* BLOOD */
-    @keyframes blood { 0%{opacity:1;transform:scale(0.3) rotate(0deg);} 100%{opacity:0;transform:scale(2) rotate(180deg);} }
-    .blood { position:absolute; width:80px; height:80px; background:url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAACXBIWXMAAAsTAAALEwEAmpwYAAABJElEQVR4nO3dO2oCQRjF8d8lJBGs0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0i6w0
+    // === CORE ===
+    let scene, camera, renderer, world, player, vehicle;
+    let keys = {}, mouse = {x:0, y:0, down:false};
+    let money = 1000000, health = 100, armor = 50;
+    let currentWeapon = 'pistol', ammo = {pistol:150, current:30};
+
+    const loadingFill = document.getElementById('loadFill');
+    const progressText = document.getElementById('progress');
+    const startBtn = document.getElementById('startBtn');
+    const hud = document.getElementById('hud');
+
+    // === INIT ===
+    async function init() {
+      scene = new THREE.Scene();
+      scene.fog = new THREE.FogExp2(0x87CEEB, 0.0008);
+
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.set(0, 5, 10);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      document.getElementById('container').appendChild(renderer.domElement);
+
+      // Lights
+      const ambient = new THREE.AmbientLight(0x404040, 1);
+      scene.add(ambient);
+      const sun = new THREE.DirectionalLight(0xffffff, 1.5);
+      sun.position.set(50, 100, 50);
+      sun.castShadow = true;
+      sun.shadow.mapSize.width = 2048;
+      sun.shadow.mapSize.height = 2048;
+      scene.add(sun);
+
+      // Physics
+      await RapierPhysics();
+      world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
+
+      // Load assets
+      await loadCity();
+      createPlayer();
+      setupControls();
+      setupHUD();
+      setupMinimap();
+
+      updateProgress(100);
+      startBtn.style.display = 'block';
+      startBtn.onclick = () => {
+        document.getElementById('loading').remove();
+        hud.style.display = 'block';
+        animate();
+      };
+    }
+
+    function updateProgress(p) {
+      progressText.textContent = p;
+      loadingFill.style.width = p + '%';
+    }
+
+    // === CITY GENERATION ===
+    async function loadCity() {
+      updateProgress(10);
+      const groundGeo = new THREE.PlaneGeometry(500, 500);
+      const groundMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+      const ground = new THREE.Mesh(groundGeo, groundMat);
+      ground.rotation.x = -Math.PI / 2;
+      ground.receiveShadow = true;
+      scene.add(ground);
+
+      // Roads
+      const roadMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+      for (let i = -200; i <= 200; i += 50) {
+        const hRoad = new THREE.Mesh(new THREE.PlaneGeometry(500, 20), roadMat);
+        hRoad.position.y = 0.01;
+        hRoad.position.z = i;
+        hRoad.rotation.x = -Math.PI / 2;
+        scene.add(hRoad);
+
+        const vRoad = new THREE.Mesh(new THREE.PlaneGeometry(20, 500), roadMat);
+        vRoad.position.y = 0.01;
+        vRoad.position.x = i;
+        vRoad.rotation.x = -Math.PI / 2;
+        scene.add(vRoad);
+      }
+      updateProgress(30);
+
+      // Buildings
+      const buildingMats = [0x555555, 0x666666, 0x444444, 0x777777].map(c => new THREE.MeshStandardMaterial({ color: c }));
+      for (let i = 0; i < 120; i++) {
+        const w = 15 + Math.random() * 25;
+        const h = 20 + Math.random() * 60;
+        const d = 15 + Math.random() * 25;
+        const geo = new THREE.BoxGeometry(w, h, d);
+        const mat = buildingMats[Math.floor(Math.random() * buildingMats.length)];
+        const building = new THREE.Mesh(geo, mat);
+        building.position.y = h / 2;
+        building.position.x = (Math.random() - 0.5) * 400;
+        building.position.z = (Math.random() - 0.5) * 400;
+        building.castShadow = true;
+        building.receiveShadow = true;
+        scene.add(building);
+
+        // Windows
+        const windowGeo = new THREE.PlaneGeometry(2, 3);
+        const windowMat = new THREE.MeshBasicMaterial({ color: 0xffff99 });
+        for (let f = 5; f < h - 5; f += 8) {
+          for (let s = -w/2 + 5; s < w/2 - 5; s += 6) {
+            const win = new THREE.Mesh(windowGeo, windowMat);
+            win.position.set(s, f, d/2 + 0.1);
+            building.add(win);
+          }
+        }
+      }
+      updateProgress(70);
+
+      // Cars (static)
+      const carGeo = new THREE.BoxGeometry(4, 1.8, 8);
+      const carColors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff];
+      for (let i = 0; i < 40; i++) {
+        const car = new THREE.Mesh(carGeo, new THREE.MeshStandardMaterial({ color: carColors[Math.floor(Math.random()*5)] }));
+        car.position.y = 1;
+        car.position.x = (Math.random() - 0.5) * 400;
+        car.position.z = (Math.random() - 0.5) * 400;
+        car.rotation.y = Math.random() * Math.PI;
+        car.castShadow = true;
+        scene.add(car);
+      }
+      updateProgress(90);
+    }
+
+    // === PLAYER ===
+    function createPlayer() {
+      const playerGeo = new THREE.CylinderGeometry(0.8, 0.8, 2.5, 8);
+      const playerMat = new THREE.MeshStandardMaterial({ color: 0x00aaff });
+      player = new THREE.Mesh(playerGeo, playerMat);
+      player.position.set(0, 1.5, 0);
+      player.castShadow = true;
+      scene.add(player);
+
+      camera.position.set(0, 8, 15);
+      player.add(camera);
+    }
+
+    // === CONTROLS ===
+    function setupControls() {
+      window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+      window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+      renderer.domElement.addEventListener('mousemove', e => {
+        mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+      });
+      renderer.domElement.addEventListener('mousedown', () => mouse.down = true);
+      renderer.domElement.addEventListener('mouseup', () => mouse.down = false);
+    }
+
+    // === HUD ===
+    function setupHUD() {
+      document.getElementById('healthFill').style.width = '100%';
+      document.getElementById('armorFill').style.width = '50%';
+      document.getElementById('money').textContent = '$' + money.toLocaleString();
+    }
+
+    function updateHUD() {
+      document.getElementById('healthFill').style.width = (health / 100 * 100) + '%';
+      document.getElementById('armorFill').style.width = (armor / 100 * 100) + '%';
+      document.getElementById('money').textContent = '$' + money.toLocaleString();
+      document.getElementById('ammo').textContent = ammo.current + ' / ' + ammo.pistol;
+    }
+
+    // === MINIMAP ===
+    function setupMinimap() {
+      const mini = document.getElementById('minimap');
+      const ctx = mini.getContext('2d');
+      mini.width = 180; mini.height = 180;
+
+      function draw() {
+        ctx.fillStyle = '#111';
+        ctx.fillRect(0, 0, 180, 180);
+        ctx.fillStyle = '#0f0';
+        ctx.beginPath();
+        ctx.arc(90 + player.position.x * 0.2, 90 + player.position.z * 0.2, 4, 0, Math.PI * 2);
+        ctx.fill();
+        requestAnimationFrame(draw);
+      }
+      draw();
+    }
+
+    // === GAME LOOP ===
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const speed = 0.2;
+      if (keys['w']) player.position.z -= speed;
+      if (keys['s']) player.position.z += speed;
+      if (keys['a']) player.position.x -= speed;
+      if (keys['d']) player.position.x += speed;
+
+      if (mouse.down && ammo.current > 0) {
+        ammo.current--;
+        // Simple muzzle flash
+        const flash = new THREE.PointLight(0xffaa00, 2, 10);
+        flash.position.copy(player.position);
+        flash.position.y += 1.5;
+        scene.add(flash);
+        setTimeout(() => scene.remove(flash), 50);
+      }
+
+      updateHUD();
+      renderer.render(scene, camera);
+    }
+
+    // === START ===
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    init();
+  </script>
+</body>
+</html>
